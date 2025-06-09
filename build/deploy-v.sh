@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/.."
 echo $DIR
@@ -19,12 +19,12 @@ if [[ "$(uname -a)" == *"Darwin"* ]]; then
     ./project/victor/scripts/victor_start.sh
 else
 
-docker run -it \
+docker run --rm -it \
     -v $(pwd)/anki-deps:/home/$USER/.anki \
     -v $(pwd):$(pwd) \
     -v $(pwd)/build/cache:/home/$USER/.ccache \
     -v /home/$USER/.ssh:/home/$USER/.ssh \
-    vic-standalone-builder-4 bash -c \
+    vic-standalone-builder-5 bash -c \
     "cd $(pwd) && \
     eval \$(ssh-agent) && \
     ssh-add robot_sshkey && \
