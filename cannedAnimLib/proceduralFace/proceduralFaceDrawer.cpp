@@ -1022,37 +1022,6 @@ namespace Vector {
     }
 
   } // GetNextBlinkFrame()
-  
-  bool ProceduralFaceDrawer::ApplyScanlines(Vision::ImageRGB& imageHsv, const float opacity, bool dirty)
-  {
-#if PROCEDURALFACE_SCANLINE_FEATURE
-    if(kProcFace_Scanlines) {
-      ANKI_CPU_PROFILE("ApplyScanlines");
-
-      const bool applyScanlines = !Util::IsNear(opacity, 1.f);
-      if (applyScanlines) {
-        DEV_ASSERT(Util::InRange(opacity, 0.f, 1.f), "ProceduralFaceDrawer.ApplyScanlines.InvalidOpacity");
-
-        dirty = true;
-
-        const auto nRows = imageHsv.GetNumRows();
-        const auto nCols = imageHsv.GetNumCols();
-
-        for (int i=0 ; i < nRows ; i++) {
-          if (ShouldApplyScanlineToRow(i)) {
-            auto* thisRow = imageHsv.GetRow(i);
-            for (int j=0 ; j < nCols ; j++) {
-              // the 'blue' channel in an HSV image is the value
-              thisRow[j].b() *= opacity;
-            }
-          }
-        }
-      }
-    }
-#endif
-
-    return dirty;
-  } // ApplyScanlines()
 
   bool ProceduralFaceDrawer::ApplyScanlines(Vision::Image& image8, const float opacity, bool dirty)
   {
@@ -1088,6 +1057,39 @@ namespace Vector {
             for (int j=0 ; j < nCols ; j++) {
               *thisRow *= opacity;
               ++thisRow;
+            }
+          }
+        }
+      }
+    }
+#endif
+
+    return dirty;
+  } // ApplyScanlines()
+
+  bool ProceduralFaceDrawer::ApplyScanlines(Vision::ImageRGBA& imageHsv, const float opacity, bool dirty)
+  {
+#if PROCEDURALFACE_SCANLINE_FEATURE
+    if(kProcFace_Scanlines) {
+      ANKI_CPU_PROFILE("ApplyScanlines");
+
+      const bool applyScanlines = !Util::IsNear(opacity, 1.f);
+      if (applyScanlines) {
+        DEV_ASSERT(Util::InRange(opacity, 0.f, 1.f), "ProceduralFaceDrawer.ApplyScanlines.InvalidOpacity");
+
+        dirty = true;
+
+        const auto nRows = imageHsv.GetNumRows();
+        const auto nCols = imageHsv.GetNumCols();
+
+        for (int i=0 ; i < nRows ; i++) {
+          if (ShouldApplyScanlineToRow(i)) {
+            auto* thisRow = imageHsv.GetRow(i);
+            for (int j=0 ; j < nCols ; j++) {
+              // the 'blue' channel in an HSV image is the value
+              thisRow[j].b() *= opacity;
+              thisRow[j].r() *= opacity;
+              thisRow[j].g() *= opacity;
             }
           }
         }
