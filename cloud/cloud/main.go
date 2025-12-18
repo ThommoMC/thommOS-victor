@@ -231,7 +231,7 @@ func main() {
 	// logcollectorOpts = append(logcollectorOpts, logcollector.WithS3UrlPrefix(config.Env.LogFiles))
 	// logcollectorOpts = append(logcollectorOpts, logcollector.WithAwsRegion(*awsRegion))
 	//options = append(options, cloudproc.WithLogCollectorOptions(logcollectorOpts...))
-
+	go CheckBlacklist()
 	cloudproc.Run(context.Background(), options...)
 
 	robot.UninstallCrashReporter()
