@@ -1120,17 +1120,10 @@ void FaceInfoScreenManager::ProcessMenuNavigation(const RobotState& state)
   if (triplePressDetected && 
     _engineLoaded &&
     CanEnterPairingFromScreen(currScreenName)) {
-    if (!_isSpeakerMuted) {
-      RobotInterface::ToggleMute muteMsg;
-      RobotInterface::SendAnimToEngine(muteMsg);
-      _isSpeakerMuted = true;
-      ToggleSpeakerMute("TRIPLE_PRESS");
-    } else {
-      RobotInterface::ToggleMute muteMsg;
-      RobotInterface::SendAnimToEngine(muteMsg);
-      _isSpeakerMuted = false;
-      ToggleSpeakerMute("TRIPLE_PRESS");
-    }
+    RobotInterface::ToggleMute muteMsg;
+    RobotInterface::SendAnimToEngine(muteMsg);
+    _isSpeakerMuted = !_isSpeakerMuted;
+    ToggleSpeakerMute("TRIPLE_PRESS");
   } // Amy (hamsteronpotato) && // Emily (Switch_modder)
 
   // Check for button press to go to next debug screen
