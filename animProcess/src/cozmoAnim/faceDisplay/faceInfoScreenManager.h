@@ -92,6 +92,7 @@ public:
 
   // turn mute on or off (reason sent to DAS)
   void ToggleMute(const std::string& reason);
+  void ToggleSpeakerMute(const std::string& reason); // Emily (Switch_modder)
   
   void StartAlexaNotification();
 
@@ -124,6 +125,8 @@ public:
   // Forcibly exit any screen
   void ExitCCScreen(Anim::AnimationStreamer* animStreamer);
 
+  bool _isSpeakerMuted = false; // Amy (hamsteronpotato) && // Emily (Switch_modder)
+
 private:
   const Anim::AnimContext* _context = nullptr;
   
@@ -149,7 +152,8 @@ private:
                            bool& buttonPressedEvent,
                            bool& buttonReleasedEvent,
                            bool& singlePressDetected, 
-                           bool& doublePressDetected);
+                           bool& doublePressDetected,
+                           bool& triplePressDetected); //added by claudix29
   
   // Returns true if screenName is one of the screens that allow the user to enter pairing when
   // double pressing the backpack and on the charger
@@ -190,6 +194,7 @@ private:
   void DrawCustomText();
   void DrawAlexaFace();
   void DrawMuteAnimation();
+  void DrawSpeakerMuteAnimation(); // Emily (Switch_modder)
   void DrawAlexaNotification();
   
   // Draw the _scratchDrawingImg to the face

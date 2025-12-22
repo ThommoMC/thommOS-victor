@@ -141,10 +141,12 @@ namespace {
 
   // How long the button needs to be pressed for before it should trigger shutdown animation
   CONSOLE_VAR( u32, kButtonPressDurationForShutdown_ms, "FaceInfoScreenManager", 500 );
+
+  CONSOLE_VAR_RANGED(int, kUnmuteVolumeLevel, "FaceInfoScreenManager", 5, 0, 5); // Amy (hamsteronpotato)
 #if ANKI_DEV_CHEATS
   // Fake one of several types of button presses. This value will get reset immediately, so to
   // run it again from the web interface, first set it to NoOp
-  CONSOLE_VAR_ENUM(int, kFakeButtonPressType, "FaceInfoScreenManager", 0, "NoOp,singlePressDetected,doublePressDetected");
+  CONSOLE_VAR_ENUM(int, kFakeButtonPressType, "FaceInfoScreenManager", 0, "NoOp,singlePressDetected,doublePressDetected,triplePressDetected");
 #endif
 }
 
@@ -236,6 +238,7 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   ADD_SCREEN(AlexaPairingFailed, AlexaPairingFailed);
   ADD_SCREEN(AlexaPairingExpired, AlexaPairingExpired);
   ADD_SCREEN(ToggleMute, ToggleMute);
+  ADD_SCREEN(ToggleSpeakerMute, ToggleSpeakerMute); // Emily (Switch_modder)
   ADD_SCREEN(AlexaNotification, AlexaNotification);
   
   if (hideSpecialDebugScreens) {
@@ -415,6 +418,14 @@ void FaceInfoScreenManager::Init(Anim::AnimContext* context, Anim::AnimationStre
   SET_ENTER_ACTION(ToggleMute, toggleMuteEnterAction);
   // TODO (VIC-11606): don't use timeout and instead wait for mute anim to end
   SET_TIMEOUT(ToggleMute, kToggleMuteTimeout_s, None);
+
+  // === Toggling speaker mute === // Emily (Switch_modder), used the above as base
+  auto toggleSpeakerMuteEnterAction = [this]() {
+    DrawSpeakerMuteAnimation();
+  };
+  SET_ENTER_ACTION(ToggleSpeakerMute, toggleSpeakerMuteEnterAction);
+  // TODO (VIC-11606): don't use timeout and instead wait for mute anim to end
+  SET_TIMEOUT(ToggleSpeakerMute, kToggleMuteTimeout_s, None);
   
   // === AlexaNotification ===
   auto alexaNotification = [this]() {
@@ -486,6 +497,7 @@ bool FaceInfoScreenManager::IsActivelyDrawingToScreen() const
     case ScreenName::None:
     case ScreenName::Pairing:
     case ScreenName::ToggleMute:
+    case ScreenName::ToggleSpeakerMute: // Emily (Switch_modder)
     case ScreenName::AlexaNotification:
     case ScreenName::SelfTestRunning:
       return false;
@@ -932,11 +944,13 @@ void FaceInfoScreenManager::CheckForButtonEvent(const bool buttonPressed,
                                                 bool& buttonPressedEvent,
                                                 bool& buttonReleasedEvent,
                                                 bool& singlePressDetected, 
-                                                bool& doublePressDetected)
+                                                bool& doublePressDetected,
+                                                bool& triplePressDetected) // clx29
 {
   static u32  lastPressTime_ms   = 0;
   static bool singlePressPending = false;
   static bool doublePressPending = false;
+  static bool triplePressPending = false; // clx29
   static bool buttonWasPressed   = false;
 
   // Whether or not the shutdown message was already sent
@@ -947,37 +961,66 @@ void FaceInfoScreenManager::CheckForButtonEvent(const bool buttonPressed,
   buttonWasPressed = buttonPressed;
   singlePressDetected = false;
   doublePressDetected = false;
+  triplePressDetected = false; // clx29 (reset)
 
   // The maximum amount of time allowed between button releases
-  // to register as a double press
-  static const u32 kDoublePressWindow_ms   = 700;
+  static const u32 kDoublePressWindow_ms   = 500; // Emily (Switch_modder), tighten timing to remove the laggy feeling
 
-  const u32  curTime_ms         = BaseStationTimer::getInstance()->GetCurrentTimeStamp();
+  const u32  curTime_ms           = BaseStationTimer::getInstance()->GetCurrentTimeStamp();
   const bool mightBeDoublePress = (lastPressTime_ms > 0) && (curTime_ms - lastPressTime_ms < kDoublePressWindow_ms);
+  
+  // clx29
+  const bool mightBeTriplePress = doublePressPending && mightBeDoublePress; 
+
 
   if (buttonPressedEvent) {
-    if (mightBeDoublePress) {
-      lastPressTime_ms = 0;
+    if (mightBeTriplePress) { //clx29 && // Emily (Switch_modder)
+      doublePressPending = false;
+      singlePressPending = false;
+      triplePressPending = true;  
+      lastPressTime_ms = curTime_ms;
+    } else if (mightBeDoublePress) { 
+      lastPressTime_ms = curTime_ms;
       doublePressPending = true;
-    } else {
+      singlePressPending = false; 
+    } else { 
       lastPressTime_ms = curTime_ms;
     }
-    singlePressPending = false;
+    
+  
   } else if (buttonReleasedEvent) {
-    if (lastPressTime_ms > 0) {
-      singlePressPending = true;
-    } else if (doublePressPending) {
+    if (triplePressPending) {  // clx29 && // Emily (Switch_modder)
+      triplePressPending = false;
+      triplePressDetected = true;
+      lastPressTime_ms = 0;
       doublePressPending = false;
-      doublePressDetected = true;
+      singlePressPending = false;
     }
+   
+    else if (lastPressTime_ms > 0 && !doublePressPending) { 
+      singlePressPending = true;
+    } 
+
     shutdownSent = false;
-  } else if (singlePressPending && !mightBeDoublePress) {
+
+  } else if ((singlePressPending || doublePressPending) && !mightBeDoublePress) { //clx29
+    
+    
+    if (doublePressPending) { 
+        doublePressDetected = true; 
+        doublePressPending = false;
+    } else if (singlePressPending) { 
+        singlePressDetected = true; 
+        singlePressPending = false;
+    }
+
+    // Reset
     lastPressTime_ms = 0;
-    singlePressPending = false;
-    singlePressDetected = true;
+
   }
 
   // Check if button was held down long enough for shutdown animation to start
+
   const bool shouldTriggerShutdown = buttonPressed && 
                                      (lastPressTime_ms > 0) && 
                                      (curTime_ms - lastPressTime_ms > kButtonPressDurationForShutdown_ms) &&
@@ -990,15 +1033,21 @@ void FaceInfoScreenManager::CheckForButtonEvent(const bool buttonPressed,
     singlePressDetected = false;
     doublePressPending  = false;
     doublePressDetected = false;
+    triplePressPending  = false; // clx29
+    triplePressDetected = false; // clx29
     shutdownSent        = true;
   }
-  
+ 
 #if ANKI_DEV_CHEATS
+
   if( kFakeButtonPressType == 1 ) { // single press
     singlePressDetected = true;
     kFakeButtonPressType = 0;
   } else if( kFakeButtonPressType == 2 ) { // double press
     doublePressDetected = true;
+    kFakeButtonPressType = 0;
+  } else if( kFakeButtonPressType == 3 ) { // triple press - clx29
+    triplePressDetected = true;
     kFakeButtonPressType = 0;
   }
 #endif
@@ -1020,11 +1069,13 @@ void FaceInfoScreenManager::ProcessMenuNavigation(const RobotState& state)
   bool buttonReleasedEvent;
   bool singlePressDetected;
   bool doublePressDetected;
+  bool triplePressDetected; //added by claudix29
   CheckForButtonEvent(buttonIsPressed, 
                       buttonPressedEvent, 
                       buttonReleasedEvent, 
                       singlePressDetected, 
-                      doublePressDetected);
+                      doublePressDetected,
+                      triplePressDetected);
 
   const bool isOnCharger = static_cast<bool>(state.status & (uint32_t)RobotStatusFlag::IS_ON_CHARGER);
 
@@ -1067,6 +1118,24 @@ void FaceInfoScreenManager::ProcessMenuNavigation(const RobotState& state)
   {
     ToggleMute("DOUBLE_PRESS");
   }
+
+  if (triplePressDetected && 
+    _engineLoaded &&
+    CanEnterPairingFromScreen(currScreenName)) {
+    if (!_isSpeakerMuted) {
+      RobotInterface::UpdateVolume volume;
+      volume.volumeLevel = 0;
+      RobotInterface::SendAnimToEngine(volume);
+      _isSpeakerMuted = true;
+      ToggleSpeakerMute("TRIPLE_PRESS");
+    } else {
+      RobotInterface::UpdateVolume volume;
+      volume.volumeLevel = kUnmuteVolumeLevel;
+      RobotInterface::SendAnimToEngine(volume);
+      _isSpeakerMuted = false;
+      ToggleSpeakerMute("TRIPLE_PRESS");
+    }
+  } // Amy (hamsteronpotato) && // Emily (Switch_modder)
 
   // Check for button press to go to next debug screen
   if (buttonReleasedEvent) {
@@ -1706,6 +1775,21 @@ void FaceInfoScreenManager::DrawMuteAnimation()
   _animationStreamer->SetStreamingAnimation(animName, 0, 1, 0, shouldInterrupt, overrideAllSpritesToEyeColor);
   
 }
+
+void FaceInfoScreenManager::DrawSpeakerMuteAnimation() // Emily (Switch_modder), Copied from above
+{
+  if( _currScreen == nullptr ) {
+    return;
+  }
+  const bool speakerMuted = _context->GetMicDataSystem()->IsSpeakerMuted();
+  // The value of muted was set prior to this method call, so indicates a transition _to_ that state,
+  // so play the on/off or off/on anim to reflect that
+  const std::string animName = speakerMuted ? "anim_speakerstate_speakeroff_01" : "anim_speakerstate_speakeron_01";
+  const bool shouldInterrupt = true;
+  const bool overrideAllSpritesToEyeColor = true;
+  _animationStreamer->SetStreamingAnimation(animName, 0, 1, 0, shouldInterrupt, overrideAllSpritesToEyeColor);
+  
+}
   
 void FaceInfoScreenManager::DrawAlexaNotification()
 {
@@ -1957,6 +2041,30 @@ void FaceInfoScreenManager::ToggleMute(const std::string& reason)
     SetScreen(ScreenName::ToggleMute);
   }
 }
+
+void FaceInfoScreenManager::ToggleSpeakerMute(const std::string& reason) // Emily (Switch_modder), Copied from above
+{
+
+  _context->GetMicDataSystem()->ToggleSpeakerMute();
+  if(_isSpeakerMuted) {
+    DASMSG(speaker_off_message, "robot.speaker_off", "Speaker disabled (muted)");
+    DASMSG_SET(s1, reason, "reason (how it was toggled)");
+    DASMSG_SEND();
+  }
+  else {
+    DASMSG(speaker_on_message, "robot.speaker_on", "Speaker enabled (unmuted)");
+    DASMSG_SET(s1, reason, "reason (how it was toggled)");
+    DASMSG_SEND();
+  }
+  
+  if ((_currScreen != nullptr) && (_currScreen->GetName() == ScreenName::ToggleSpeakerMute)) {
+    // abort current animation and restart new one
+    DrawSpeakerMuteAnimation();
+    _currScreen->RestartTimeout();
+  } else {
+    SetScreen(ScreenName::ToggleSpeakerMute);
+  }
+}
   
 void FaceInfoScreenManager::StartAlexaNotification()
 {
@@ -2086,6 +2194,7 @@ bool FaceInfoScreenManager::CanEnterPairingFromScreen( const ScreenName& screenN
     case ScreenName::AlexaPairingFailed:
     case ScreenName::AlexaPairingExpired:
     case ScreenName::ToggleMute:
+    case ScreenName::ToggleSpeakerMute: // Emily (Switch_modder)
     case ScreenName::AlexaNotification:
       return true;
     default:
@@ -2114,6 +2223,7 @@ bool FaceInfoScreenManager::ScreenNeedsWait(const ScreenName& screenName) const
     case ScreenName::AlexaPairingFailed:
     case ScreenName::AlexaPairingExpired:
     case ScreenName::ToggleMute:
+    case ScreenName::ToggleSpeakerMute: // Emily (Switch_modder)
     case ScreenName::AlexaNotification:
       return true;
     default:
