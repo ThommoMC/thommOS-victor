@@ -153,6 +153,8 @@ private:
 
   JdocsManager*                  _jdocsManager = nullptr;
   Audio::EngineRobotAudioClient* _audioClient = nullptr;
+
+  bool _isMuted = false;
 };
 
 
