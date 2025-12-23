@@ -46,6 +46,8 @@
 
 #include <iomanip>
 #include <sstream>
+#include <thread> //claudix29
+#include <chrono> //claudix29
 
 namespace {
 #define LOG_CHANNEL "Microphones"
@@ -58,6 +60,7 @@ CONSOLE_VAR(bool, kSuppressTriggerResponse, RECOGNIZER_CONSOLE_GROUP, false);
 #endif // ANKI_DEV_CHEATS
 
 const std::string kMicSettingsFile = "micMuted";
+const std::string kSpeakerSettingsFile = "speakerMuted"; //claudix29
 const std::string kSpeechRecognizerWebvizName = "speechrecognizersys";
 }
 
@@ -176,7 +179,17 @@ void MicDataSystem::Init(const Anim::RobotDataLoader& dataLoader)
   if( Util::FileUtils::FileExists(_persistentFolder + kMicSettingsFile) ) {
     ToggleMicMute();
   }
-  
+
+  if( Util::FileUtils::FileExists(_persistentFolder + kSpeakerSettingsFile) ) { //claudix29 make speakermute persist // Amy (hamsteronpotato) i have tweaked this a bit
+    std::thread([this]() { //needed so the audio system is fully up
+      std::this_thread::sleep_for(std::chrono::seconds(5)); 
+      ToggleSpeakerMute();
+      Anki::Vector::FaceInfoScreenManager::getInstance()-> _isSpeakerMuted = true;
+      RobotInterface::ToggleMute muteMsg;
+      RobotInterface::SendAnimToEngine(muteMsg);
+    }).detach();
+  }
+
 #if ANKI_DEV_CHEATS
   auto* webService = _context->GetWebService();
   if( webService ) {
@@ -900,6 +913,38 @@ void MicDataSystem::ToggleMicMute()
   }
 }
   
+void MicDataSystem::ToggleSpeakerMute()
+{
+  // TODO: This method is absolutely shitty, I hate this just as much as the next person
+  _speakerMuted = !_speakerMuted;
+  
+  // play audio event for changing mic mute state
+  auto* audioController = _context->GetAudioController();
+  if (audioController != nullptr) {
+    using namespace AudioEngine;
+    using GenericEvent = AudioMetaData::GameEvent::GenericEvent;
+    const auto eventID = ToAudioEventId( _speakerMuted ? GenericEvent::Play__Robot_Vic_Alexa__Sfx_Sml_State_Privacy_Mode_On : GenericEvent::Play__Robot_Vic_Alexa__Sfx_Sml_State_Privacy_Mode_Off );
+    const auto gameObject = ToAudioGameObject(AudioMetaData::GameObjectType::Default);
+    audioController->PostAudioEvent( eventID, gameObject );
+  }
+  
+  // toggle backpack lights
+  if( _context != nullptr ) {
+    auto* bplComp = _context->GetBackpackLightComponent();
+    if( bplComp != nullptr ) {
+      bplComp->SetMicMute( _speakerMuted );
+    }
+  }
+
+  // add/remove persistent file -claudix29 copied from above
+  const auto speakermuteFile = _persistentFolder + kSpeakerSettingsFile;
+  if( _speakerMuted ) {
+    Util::FileUtils::TouchFile( speakermuteFile );
+  } else if( Util::FileUtils::FileExists( speakermuteFile ) ) {
+    Util::FileUtils::DeleteFile( speakermuteFile );
+  }
+}
+
 void MicDataSystem::SetButtonWakeWordIsAlexa(bool isAlexa)
 {
   _buttonPressIsAlexa = isAlexa;

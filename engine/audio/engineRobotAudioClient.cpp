@@ -227,7 +227,6 @@ void EngineRobotAudioClient::HandleRobotEngineMessage( const AnkiEvent<RobotInte
     case RobotInterface::RobotToEngine::Tag::audioCallbackError:
       HandleCallbackEvent( message.GetData().Get_audioCallbackError() );
       break;
-      
     default:
       PRINT_NAMED_ERROR("EngineRobotAudioClient.HandleRobotEngineMessage", "Unexpected message type");
       break;

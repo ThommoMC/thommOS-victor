@@ -12,6 +12,7 @@
 
 #include "engine/components/settingsManager.h"
 
+#include "clad/robotInterface/messageRobotToEngine.h"
 #include "engine/components/jdocsManager.h"
 #include "engine/components/robotHealthReporter.h"
 #include "engine/components/settingsCommManager.h"
@@ -20,6 +21,8 @@
 #include "engine/robotInterface/messageHandler.h"
 
 #include "coretech/common/engine/utils/timer.h"
+#include "proto/external_interface/messages.pb.h"
+#include "proto/external_interface/settings.pb.h"
 #include "util/console/consoleInterface.h"
 #include "util/environment/locale.h"
 
@@ -90,8 +93,37 @@ namespace Anki
           ApplyPendingSettingsUpdate(external_interface::RobotSetting::eye_color, false);
         }
       } }));
+        AddSignalHandle(messageHandler->Subscribe(RobotInterface::RobotToEngineTag::toggleMute, [this](const AnkiEvent<RobotInterface::RobotToEngine>& event)
+                                                  {
+          if (!_isMuted) {
+            _robot->GetAudioClient()->SetRobotMasterVolume(external_interface::Volume::MUTE);
+            _isMuted = true;
+          } else {
+            switch (GetRobotSettingAsUInt(external_interface::RobotSetting::master_volume)) {
+              case external_interface::Volume::LOW:
+                _robot->GetAudioClient()->SetRobotMasterVolume(external_interface::Volume::LOW);
+                break;
+              case external_interface::Volume::MEDIUM_LOW:
+                _robot->GetAudioClient()->SetRobotMasterVolume(external_interface::Volume::MEDIUM_LOW);
+                break;
+              case external_interface::Volume::MEDIUM:
+                _robot->GetAudioClient()->SetRobotMasterVolume(external_interface::Volume::MEDIUM);
+                break;
+              case external_interface::Volume::MEDIUM_HIGH:
+                _robot->GetAudioClient()->SetRobotMasterVolume(external_interface::Volume::MEDIUM_HIGH);
+                break;
+              case external_interface::Volume::HIGH:
+                _robot->GetAudioClient()->SetRobotMasterVolume(external_interface::Volume::HIGH);
+                break;
+              default:
+                //Shouldn't happen, but just in case
+                _robot->GetAudioClient()->SetRobotMasterVolume(external_interface::Volume::MEDIUM);
+                break;
+            }
+            _isMuted = false;
+          }
+        }));
       }
-
       // Call the JdocsManager to see if our robot settings jdoc file exists
       bool settingsDirty = false;
       const bool jdocNeedsCreation = _jdocsManager->JdocNeedsCreation(external_interface::JdocType::ROBOT_SETTINGS);
