@@ -1036,7 +1036,7 @@ func (service *rpcService) checkConnectionID(id string) bool {
 		return false
 	}
 	// Check whether we are in Webots.
-	if IsOnRobot {
+	if hasSwitchboard {
 		f, responseChan := switchboardManager.CreateChannel(gw_clad.SwitchboardResponseTag_ExternalConnectionResponse, 1)
 		defer f()
 		switchboardManager.Write(gw_clad.NewSwitchboardRequestWithExternalConnectionRequest(&gw_clad.ExternalConnectionRequest{}))
@@ -1866,7 +1866,7 @@ func (service *rpcService) UpdateAccountSettings(ctx context.Context, in *extint
 
 // NOTE: this is the only function that won't need to check the client_token_guid header
 func (service *rpcService) UserAuthentication(ctx context.Context, in *extint.UserAuthenticationRequest) (*extint.UserAuthenticationResponse, error) {
-	if !IsOnRobot {
+	if !hasSwitchboard {
 		return nil, grpc.Errorf(codes.Internal, "User authentication is only available on the robot")
 	}
 
